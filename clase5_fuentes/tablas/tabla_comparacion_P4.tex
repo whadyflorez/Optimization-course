@@ -1,0 +1,9 @@
+\begin{tabular}{lrrrrr}\toprule
+M\'etodo & iter. & eval.\ $f$ & eval.\ $\nabla f$ & $\|x-x^\ast\|$ & viol.\\\midrule
+SQP (Hessiana exacta) & 6 & 41 & 13 & 5e-09 & 0e+00\\
+SQP (BFGS) & 22 & 97 & 89 & 5e-09 & 0e+00\\
+Penalización exterior & 20 & 55 & 27 & 7e-08 & 1e-07\\
+Barrera interior & 52 & 65 & 58 & 4e-05 & 0e+00\\
+scipy SLSQP (SQP) & 17 & 23 & 17 & 5e-09 & 4e-13\\
+scipy trust-constr (barrera) & 36 & 27 & 25 & 2e-07 & 0e+00\\
+\bottomrule\end{tabular}

@@ -1,0 +1,18 @@
+SLSQP: [1. 1.] 0.9999999986030157 mu = [0.66666667 0.66666667]
+residuos KKT (est, fac, dual, comp): (np.float64(4.577566798522237e-16), np.float64(2.0954760149294316e-09), 0.0, np.float64(1.3969840073508684e-09))
+
+Enumeracion de conjuntos activos (P2):
+  activas=[]: x=[2. 1.] mu=[0. 0.] g=[3. 1.] factible=False mu>=0=True
+  activas=[0]: x=[1.1654 1.3581] mu=[0.7162 0.    ] g=[0.     0.5235] factible=False mu>=0=True
+  activas=[1]: x=[1.5 0.5] mu=[0. 1.] g=[1.75 0.  ] factible=False mu>=0=True
+  activas=[0, 1]: x=[1. 1.] mu=[0.6667 0.6667] g=[0. 0.] factible=True mu>=0=True
+  ambas activas (otra interseccion) x=[-2.  4.]: mu=[ -4.6667 -10.6667]
+
+Sensibilidad (relajar x1+x2<=2+eps):
+  eps=-0.10: f*=1.072955
+  eps=-0.01: f*=1.006730
+  eps=+0.00: f*=1.000000
+  eps=+0.01: f*=0.993396
+  eps=+0.10: f*=0.939638
+  pendiente (eps=+0.01): -0.6604   (teoria -mu2 = -0.6667)
+  pendiente (eps=-0.01): -0.6730   (teoria -mu2 = -0.6667)

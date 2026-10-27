@@ -1,0 +1,282 @@
+
+% =============================================================== 4
+\section{Gradient-based methods: descent, Newton, dogleg}
+
+\begin{frame}{Using derivatives: back to the smooth valley (P3)}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}
+        \item $\grad f(x)$ points \textbf{uphill}; $-\grad f$ is the direction of fastest local decrease.
+        \item General descent iteration:
+        \[ x_{k+1}=x_k+\alpha_k\,p_k,\qquad p_k=-\grad f(x_k) \]
+        \item The art is in the \textbf{step length} $\alpha_k$ (and, later, in a better direction $p_k$).
+        \item Derivatives are not magic: from a black-box $f(x)$ we get them by \textbf{finite differences}.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \fig{fig_P3_landscape.png}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Derivatives of a black box: finite differences}
+  \codesz{7.6}{9}{numgrad}
+  \small Central difference $\frac{f(x+he_i)-f(x-he_i)}{2h}$: $2n$ evaluations. The Hessian differences the gradient.
+\end{frame}
+
+\begin{frame}{Fixed step: the step length decides everything}
+  \begin{columns}[T]
+    \begin{column}{0.56\textwidth}
+      \fig{fig_gd_paths.png}
+    \end{column}
+    \begin{column}{0.42\textwidth}
+      \small
+      \begin{itemize}
+        \item $\alpha=0.01$: converges, but \textbf{500 iterations} are not enough (error still $10^{-5}$).
+        \item $\alpha=0.02$: \textbf{diverges} in 8 iterations (leaves the valid region).
+        \item Stability limit: $\alpha<2/\lambda_{\max}(H)$. Here $\lambda_{\max}\approx145$, so $\alpha<0.0138$.
+        \item Narrow valley (condition number $\approx65$): steepest descent \textbf{zig-zags}.
+      \end{itemize}
+      \begin{alertblock}{Lesson}
+        A step that is good now may be terrible later. Use a \textbf{variable} step.
+      \end{alertblock}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Variable step: prescribed decay or line search}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{block}{Prescribed decay}
+        $\alpha_k=\dfrac{\alpha_0}{1+0.05\,k}$: cheap, but you must guess $\alpha_0$ and the rate (stalls in the example: error $0.06$ after 500 its.).
+      \end{block}
+      \begin{block}{Line search (backtracking Armijo)}
+        Start with a large $\alpha$ and \textbf{halve it} until the decrease is \emph{sufficient}:
+        \[ f(x+\alpha p)\le f(x)+c_1\,\alpha\,\grad f^\top p,\quad c_1=10^{-4} \]
+        Adapts to the local scale automatically; costs a few extra evaluations per iteration.
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \fig{fig_linesearch.png}\\[-2pt]
+      \scriptsize Trial steps $\alpha=1,\,\tfrac12,\,\tfrac14,\,\tfrac18,\,\tfrac1{16}$ are rejected; $\alpha=\tfrac1{32}$ is accepted.
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Backtracking line search: the code}
+  \codesz{9}{11}{linesearch}\vspace{6pt}
+  \small Five lines: the whole of the Armijo rule. \texttt{g @ p} is the slope $\grad f^\top p$ along the step.
+\end{frame}
+
+\begin{frame}{Gradient descent with the three step rules: the code}
+  \codesz{7.1}{8.4}{gd}
+  \footnotesize \texttt{rule} changes only the line computing \texttt{alpha}. P3 from $(0.5,0.5)$: line search needs \textbf{242 iterations}.
+\end{frame}
+
+\begin{frame}{Newton's method: use the curvature}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \begin{itemize}
+        \item Replace $f$ by its \textbf{local parabola} (second-order Taylor):
+        \[ m(p)=f+\grad f^\top p+\tfrac12\,p^\top H\,p \]
+        \item Jump to the minimum of the parabola: solve
+        \[ H\,p=-\grad f,\qquad x_{k+1}=x_k+p \]
+        \item Near the optimum the error is \textbf{squared} at each step (quadratic convergence).
+        \item Cost per iteration: Hessian ($n^2$ derivatives) and one linear solve.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \fig{fig_newton_1d.png}\\[-2pt]
+      \scriptsize P1 from $t_0=1.2$ cm: three Newton steps reach $3.93$ cm (the optimum is $4.55$).
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Newton: the code}
+  \codesz{7.0}{8.2}{newton}
+  \small \texttt{safeguard=True}: shift a non-PD $H$ and backtrack. \texttt{False}: the textbook method.
+\end{frame}
+
+\begin{frame}{Newton versus gradient descent on P3}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+      \fig{fig_conv_P3.png}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \small
+      Same start $(0.5,0.5)$:
+      \begin{center}
+      \begin{tabular}{lr}
+        \toprule
+        method & iterations\\
+        \midrule
+        GD, fixed $\alpha=0.01$ & $>500$\\
+        GD, line search & 242\\
+        Newton (safeguarded) & 7\\
+        Dogleg & 9\\
+        \bottomrule
+      \end{tabular}
+      \end{center}
+      \begin{itemize}
+        \item The curve for Newton is almost \textbf{vertical}: $10^{-1}\to10^{-3}\to10^{-6}$.
+        \item But each iteration needs a Hessian (here by finite differences: 206 function calls in total).
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{When Newton fails: negative curvature}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+      \fig{fig_newton_fail.png}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \small
+      \begin{itemize}
+        \item At small area, $f$ is \textbf{not convex}: $H$ has eigenvalues $-28$ and $+154$.
+        \item The ``parabola'' opens downward in one direction: its stationary point is a \textbf{saddle}, not a minimum.
+        \item Pure Newton jumps to $a<0$, $m<0$: physically meaningless (the model is invalid there).
+      \end{itemize}
+      \begin{alertblock}{Two cures}
+        (1) Fix $H$ and line-search, (2) \textbf{limit the step} to a region where the model is trusted.
+      \end{alertblock}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Trust region: how far do we believe the model?}
+  \begin{itemize}
+    \item Model $m(p)=f+g^\top p+\tfrac12p^\top Bp$ is trusted only for $\|p\|\le\Delta$ (trust-region radius).
+    \item After the step, compare what the model \textbf{promised} with what actually happened:
+    \[ \rho=\frac{f(x)-f(x+p)}{m(0)-m(p)}=\frac{\text{actual decrease}}{\text{predicted decrease}} \]
+  \end{itemize}
+  \begin{center}\small
+  \begin{tabular}{lll}
+    \toprule
+    $\rho$ & meaning & action\\
+    \midrule
+    $\rho<0.25$ & model was poor & \textbf{shrink} $\Delta$ ($\times\frac14$)\\
+    $\rho>0.75$ and step on the boundary & model was good & \textbf{expand} $\Delta$ ($\times2$)\\
+    $\rho>0.1$ & real improvement & \textbf{accept} the step\\
+    otherwise & & reject, try a smaller region\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \small The remaining question: which step $p$ inside the region? Solving the subproblem exactly is expensive; the \textbf{dogleg} gives a cheap, good answer.
+\end{frame}
+
+\begin{frame}{The dogleg path}
+  \begin{columns}[T]
+    \begin{column}{0.5\textwidth}
+      \small
+      Two candidate points in step space:
+      \begin{itemize}
+        \item \textbf{Cauchy point} $p^U$: best step along $-\grad f$ (safe, slow).
+        \item \textbf{Newton point} $p^B=-B^{-1}g$ (fast, only trustworthy nearby).
+      \end{itemize}
+      The \textbf{dogleg path} goes $0\to p^U\to p^B$ (a bent line, like a dog's hind leg). The step is where the path leaves the trust region.
+      \begin{itemize}
+        \item $\|p^B\|\le\Delta$: take the Newton step.
+        \item $\|p^U\|\ge\Delta$: truncate steepest descent.
+        \item otherwise: stop on the sphere along $p^U\to p^B$.
+      \end{itemize}
+      \textbf{Small region $\Rightarrow$ gradient-like; large region $\Rightarrow$ Newton.}
+    \end{column}
+    \begin{column}{0.50\textwidth}
+      \fig{fig_dogleg_geometry.png}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Dogleg: the code}
+  \code{dogleg}
+  \small The step: Newton if it fits, truncated Cauchy if even that is too long, otherwise the intersection of the dogleg path with $\|p\|=\Delta$ (a quadratic equation for $\tau$).
+\end{frame}
+
+\begin{frame}{Dogleg: the trust-region loop}
+  \code{trust}
+\end{frame}
+
+\begin{frame}{Dogleg on P3 from the non-convex start}
+  \fig[0.88\linewidth]{fig_dogleg_run.png}\\[-2pt]
+  \small Start $(0.3,0.4)$ where pure Newton breaks: radius $0.3\to0.6\to1.2\to2.4$ (the model is good), converging in 9 iterations. When the model is poor, the radius would shrink instead.
+\end{frame}
+
+\begin{frame}[fragile]{Newton-type methods in \texttt{scipy}}
+\begin{lstlisting}
+from scipy.optimize import minimize
+g = lambda x: numgrad(cost_exchanger, x);  H = lambda x: numhess(cost_exchanger, x)
+res = minimize(cost_exchanger, x0, jac=g, hess=H, method="trust-exact")   # 7 its.
+\end{lstlisting}
+  \small
+  \begin{center}
+  \begin{tabular}{llrr}
+    \toprule
+    P3 from $(0.5,\,0.5)$ & \texttt{scipy} method & iterations & $f$ evals\\
+    \midrule
+    trust region, exact subproblem & \texttt{trust-exact} & 7 & 8\\
+    trust region, dogleg & \texttt{dogleg} & stops at 0 & 1\\
+    Newton with CG & \texttt{Newton-CG} & 8 & 11\\
+    quasi-Newton (BFGS, $H$ estimated) & \texttt{BFGS} & 11 & 36\\
+    \bottomrule
+  \end{tabular}
+  \end{center}
+  \begin{itemize}
+    \item \texttt{scipy}'s \texttt{dogleg} \textbf{requires} $H>0$: here it stops at once (non-PSD Hessian). Our version shifts $H$; \texttt{trust-exact} handles negative curvature natively.
+    \item \textbf{BFGS} builds $H$ from gradients only: the standard choice when Hessians are unavailable.
+  \end{itemize}
+\end{frame}
+
+% =============================================================== 5
+\section{Direct search: the simplex method}
+
+\begin{frame}{Nelder--Mead simplex: no derivatives, no probabilities}
+  \begin{columns}[T]
+    \begin{column}{0.36\textwidth}
+      \small
+      \begin{itemize}
+        \item $n+1$ points form a \textbf{simplex} (triangle in 2-D).
+        \item Sort by $f$; the \textbf{worst} vertex is replaced by a better point:
+      \end{itemize}
+      \begin{enumerate}
+        \item \textbf{reflect} through the centroid;
+        \item if great: \textbf{expand};
+        \item if bad: \textbf{contract};
+        \item if still bad: \textbf{shrink} towards the best.
+      \end{enumerate}
+      \footnotesize (Unrelated to the \emph{LP simplex} of linear programming.)
+    \end{column}
+    \begin{column}{0.62\textwidth}
+      \fig{fig_nm_ops.png}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Nelder--Mead: the code (1/2)}
+  \code{simplex_a}
+  \small Reflection, expansion and the ``keep the reflection'' case.
+\end{frame}
+
+\begin{frame}{Nelder--Mead: the code (2/2)}
+  \code{simplex_b}
+  \small Contraction, shrink, and the bookkeeping of the simplex history (used for the figure).
+\end{frame}
+
+\begin{frame}{Nelder--Mead on P3}
+  \begin{columns}[T]
+    \begin{column}{0.58\textwidth}
+      \fig{fig_nm_run.png}
+    \end{column}
+    \begin{column}{0.40\textwidth}
+      \small
+      \begin{itemize}
+        \item The triangle \textbf{crawls, stretches and rotates} down the valley. Colour = iteration.
+        \item Manual: 47 iterations, 89 evaluations. \texttt{scipy} \texttt{Nelder-Mead}: 63 iterations, 120 evaluations. Both reach $f=-93.575$.
+        \item Compare: Newton 7 iterations, but each needs derivatives.
+      \end{itemize}
+      \begin{alertblock}{When to use it}
+        Few variables, noisy or non-smooth $f$ (experiments, simulations), no derivatives. Degrades beyond $\sim10$ variables; can stall on rough problems.
+      \end{alertblock}
+    \end{column}
+  \end{columns}
+\end{frame}

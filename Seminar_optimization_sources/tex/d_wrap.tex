@@ -1,0 +1,121 @@
+
+% =============================================================== 7
+\section{Wrap-up}
+
+\begin{frame}{The methods side by side}
+  \centering\scriptsize
+  \begin{tabular}{p{2.5cm}p{2.4cm}p{3.4cm}p{3.6cm}p{2.5cm}}
+    \toprule
+    \textbf{Method} & \textbf{Needs} & \textbf{Strength} & \textbf{Weakness} & \textbf{Thermal use}\\
+    \midrule
+    Golden section & $f$ (1-D) & robust, guaranteed if unimodal & one variable; one valley & insulation thickness, fin length\\
+    Metropolis / SA & $f$ & crosses barriers; any $f$ & many evaluations; tuning of $T$, step & placement, scheduling\\
+    Great Deluge & $f$, a target & very simple; goal-oriented & fails if target unreachable & layout with a quality goal\\
+    Gradient descent & $f,\grad f$ & simple; low memory & slow in narrow valleys; step size & first runs, huge $n$\\
+    Newton & $f,\grad f,H$ & quadratic convergence & breaks if $H$ not PD; costly $H$ & smooth designs, small $n$\\
+    Dogleg (trust region) & $f,\grad f,H$ & robust Newton & needs $H$; code is longer & calibration, ill-conditioned fits\\
+    Nelder--Mead & $f$ & no derivatives; compact & scales badly beyond $\sim\!10$ variables & experiments, noisy simulations\\
+    Cutting plane & $f,g,\grad g$ & only LPs; certificates & convex only; slow & convex design with constraints\\
+    Penalty / barrier & any solver + $g$ & reuses unconstrained code & ill-conditioning; scaling & quick constrained studies\\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+\begin{frame}{Cost on P3: manual codes versus \texttt{scipy}}
+  \centering\small
+  \begin{tabular}{lrrr@{\hskip 1.2cm}lrr}
+    \toprule
+    \multicolumn{4}{c}{\textbf{manual (this seminar)}} & \multicolumn{3}{c}{\textbf{\texttt{scipy.optimize}}}\\
+    method & its. & $f$ calls & & method & its. & $f$ calls\\
+    \midrule
+    GD + line search & 242 & 3102 & & \texttt{Nelder-Mead} & 63 & 120\\
+    Newton & 7 & 206 & & \texttt{BFGS} & 11 & 36\\
+    Dogleg & 9 & 218 & & \texttt{Newton-CG} & 8 & 11$^{\ast}$\\
+    Nelder--Mead & 47 & 89 & & \texttt{trust-exact} & 7 & 8$^{\ast}$\\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{0.3cm}
+  \footnotesize $^{\ast}$ Derivatives supplied (by our finite-difference code) are not counted here.\\
+  \normalsize
+  \begin{itemize}
+    \item Every method reaches $f^\ast=-93.575$ k\$/yr. The differences are the \textbf{cost of getting there}.
+    \item Our manual counts are inflated by finite differences: a gradient costs $2n$ and a Hessian $4n^2$-ish calls. Analytic or automatic derivatives would shrink them by orders of magnitude.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Choosing a method: a short guide}
+  \begin{columns}[T]
+    \begin{column}{0.49\textwidth}
+      \begin{block}{Ask about the function}
+        \small
+        \begin{itemize}
+          \item \textbf{One variable, unimodal?} Golden section.
+          \item \textbf{Several valleys?} Annealing / Deluge / multi-start, then a local polish.
+          \item \textbf{Noisy or non-differentiable?} Simplex (or annealing).
+          \item \textbf{Smooth, derivatives cheap?} Newton-type; trust region if the Hessian can be indefinite; BFGS if you only have gradients.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{block}{Ask about the constraints}
+        \small
+        \begin{itemize}
+          \item \textbf{None:} the methods on the left.
+          \item \textbf{Bounds only:} L-BFGS-B, bounded simplex.
+          \item \textbf{Convex, few variables:} cutting plane; or a convex solver.
+          \item \textbf{General nonlinear:} SQP (\texttt{SLSQP}) or interior point (\texttt{trust-constr}).
+          \item \textbf{Quick study:} penalty / barrier on top of any unconstrained solver.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+  \vspace{0.1cm}
+  \centering\small Always: \textbf{plot first}, \textbf{scale} the variables, \textbf{check} the result against physics, and use \textbf{several starting points}.
+\end{frame}
+
+\begin{frame}{Five messages to take home}
+  \begin{enumerate}
+    \item \textbf{Look at $f$ first.} Count valleys, check smoothness, note scales. The landscape chooses the method.
+    \item \textbf{Information buys speed.} Values only (robust, slow) $\to$ gradient $\to$ Hessian (fast, fragile). Safeguards (line search, trust region) make the fast methods reliable.
+    \item \textbf{Escaping local minima costs evaluations.} Stochastic methods need tuned knobs ($T$, step, target) and \textbf{many seeds}; keep the best point seen.
+    \item \textbf{Constraints are handled by reduction}: to LPs (cutting plane), to sequences of unconstrained problems (penalty, barrier) or to QPs (SQP). Read the \textbf{multipliers}: they are shadow prices.
+    \item \textbf{Code them once, compare with \texttt{scipy}.} A 20-line manual version explains the method; the library version is what you deploy.
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Hands-on exercises}
+  \small
+  \begin{enumerate}
+    \item \textbf{P1:} double the energy price. How does the optimal thickness move? Use golden section and check with the plot.
+    \item \textbf{P2:} add a fifth cooled clamp. How many local minima appear? Compare fixed-$T$ Metropolis and SA at $T=1,\,5,\,20$ over 30 seeds.
+    \item \textbf{P3:} use $A$ in m$^2$ instead of $a=A/50$. What happens to the condition number and to gradient descent? Why does Newton not care?
+    \item \textbf{P3:} start Newton from 20 random points. Where does it fail? Does the dogleg fail there too?
+    \item \textbf{P4:} raise the demand to 150 kW. Predict how the objective changes using $\mu^\ast=5$; verify with SLSQP.
+    \item Replace \texttt{numgrad} by an analytic gradient for P1 and count the function calls saved.
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{References}
+  \footnotesize
+  \begin{itemize}
+    \item J.\ Nocedal and S.\ Wright, \emph{Numerical Optimization}, 2nd ed., Springer, 2006 (line search, Newton, trust region and dogleg: ch.\ 3--4; penalty and barrier: ch.\ 17).
+    \item A.\ Bejan, G.\ Tsatsaronis and M.\ Moran, \emph{Thermal Design and Optimization}, Wiley, 1996.
+    \item J.\ Kiefer, ``Sequential minimax search for a maximum'', \emph{Proc.\ AMS} 4, 502--506, 1953 (golden section).
+    \item N.\ Metropolis et al., ``Equation of state calculations by fast computing machines'', \emph{J.\ Chem.\ Phys.} 21, 1087--1092, 1953.
+    \item S.\ Kirkpatrick, C.\ Gelatt and M.\ Vecchi, ``Optimization by simulated annealing'', \emph{Science} 220, 671--680, 1983.
+    \item G.\ Dueck, ``New optimization heuristics: the great deluge algorithm and the record-to-record travel'', \emph{J.\ Comput.\ Phys.} 104, 86--92, 1993.
+    \item J.\ Nelder and R.\ Mead, ``A simplex method for function minimization'', \emph{Computer J.} 7, 308--313, 1965.
+    \item J.\ Kelley, ``The cutting-plane method for solving convex programs'', \emph{J.\ SIAM} 8, 703--712, 1960.
+    \item A.\ Fiacco and G.\ McCormick, \emph{Nonlinear Programming: Sequential Unconstrained Minimization Techniques}, Wiley, 1968.
+    \item Code of this seminar: \texttt{problems.py}, \texttt{methods.py}, figure scripts (all objectives \texttt{f(x)} with \texttt{x} a vector).
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[plain]
+  \centering\vfill
+  {\Large\bfseries Thank you}\\[0.4cm]
+  Questions and discussion\vfill
+\end{frame}
+
+\end{document}

@@ -1,0 +1,9 @@
+\begin{tabular}{lrrrrr}\toprule
+M\'etodo & Iter./pasos & Eval. de datos & $f(\theta)$ & $\|\theta-\theta^\ast\|$ & ms \\\midrule
+Dogleg & 20 & 6\,000 & 0.19913 & 3.7e-10 & 2 \\
+Levenberg--Marquardt & 20 & 6\,000 & 0.19913 & 1.9e-09 & 1 \\
+scipy least\_squares (lm) & 12 & 3\,600 & 0.19913 & 2.0e-08 & 1 \\
+scipy least\_squares (trf) & 10 & 3\,000 & 0.19913 & 4.8e-08 & -- \\
+SGD puro, lote 16 & 50\,000 & 800\,000 & 0.20205 & 1.4e-01 & 955 \\
+SGD + momentum 0.9, lote 16 & 15\,000 & 240\,000 & 0.20178 & 9.9e-02 & 361 \\
+\bottomrule\end{tabular}

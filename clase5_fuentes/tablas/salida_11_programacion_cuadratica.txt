@@ -1,0 +1,20 @@
+QP igualdad: [0.42857143 0.85714286 1.28571429] lambda = [-0.85714286]  (teoria x = 6/14 *(1,2,3) = [0.42857143 0.85714286 1.28571429] )
+  scipy SLSQP: [0.42857143 0.85714286 1.28571429]
+
+Conjunto activo (x0 = (2,0), W0 = {c3, c5}):
+  it 0: x=[2. 0.] W=[3, 5]  p=0  mu=[-2. -1.]
+  it 1: x=[2. 0.] W=[5]  p=[-1.  0.]  alpha=1.000
+  it 2: x=[1. 0.] W=[5]  p=0  mu=[-5.]
+  it 3: x=[1. 0.] W=[]  p=[-0.   2.5]  alpha=0.600  (choca con c1)
+  it 4: x=[1.  1.5] W=[1]  p=[0.4 0.2]  alpha=1.000
+  it 5: x=[1.4 1.7] W=[1]  p=0  mu=[0.8]
+  solucion: [1.4 1.7]  W final = [1]  f = 0.8000000000000007
+/usr/local/lib/python3.13/dist-packages/scipy/optimize/_differentiable_functions.py:737: UserWarning: delta_grad == 0.0. Check if the approximated function is linear. If the function is linear better results can be obtained by defining the Hessian as zero instead of using quasi-Newton approximations.
+  self.H.update(delta_x, delta_g)
+  scipy SLSQP: [1.4 1.7] iters 3 | trust-constr: [1.4 1.7] iters 30
+
+Enumeracion de conjuntos activos (KKT por casos), m=5 -> 2^5=32 casos
+  KKT cumplido con S = [1]  x = [1.4 1.7]  mu = [0.8]
+  puntos KKT encontrados: 1
+
+QP igualdad 2D: [1.83333333 1.16666667] [-2.66666667]
