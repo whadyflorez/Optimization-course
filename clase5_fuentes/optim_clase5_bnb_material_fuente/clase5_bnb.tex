@@ -1,0 +1,571 @@
+\documentclass[aspectratio=169]{beamer}
+\usetheme{Metropolis}
+\setbeamertemplate{blocks}[default]
+
+\usepackage[utf8]{inputenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.geometric}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{listings}
+
+\definecolor{entra}{HTML}{2E7D32}
+\definecolor{sale}{HTML}{8C1D40}
+\definecolor{pivcolor}{HTML}{D2691E}
+\definecolor{basecolor}{HTML}{3B7EA1}
+\definecolor{podado}{HTML}{B0413E}
+\definecolor{grisclaro}{HTML}{9E9E9E}
+
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  breaklines=true,
+  columns=fullflexible,
+  keywordstyle=\color{basecolor}\bfseries,
+  commentstyle=\color{gray},
+  stringstyle=\color{entra}
+}
+
+\title{Programación Entera y Branch and Bound}
+\subtitle{De la relajación LP a la poda --- ejemplos enteros y mixtos, y dos formas de resolverlo en Python}
+\author{Métodos de Optimización --- Maestría}
+\institute{Universidad Pontificia Bolivariana}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+% ================= SECCION 1 =================
+\section{Motivación: de PL continua a PL entera}
+
+\begin{frame}{¿Dónde estamos?}
+En la Clase 4 resolvimos programación lineal (PL): variables \textbf{continuas}, simplex exacto en un número finito de pasos.
+
+\vspace{0.3cm}
+Pero muchos problemas reales exigen variables \textbf{enteras}: número de mesas a fabricar, camiones a despachar, plantas a construir, o decisiones sí/no (0 o 1).
+
+\begin{alertblock}{El problema}
+El vértice óptimo que encuentra el simplex \textbf{casi nunca} cae exactamente en un punto de coordenadas enteras. No podemos simplemente ``redondear'' el resultado: redondear puede violar restricciones, o alejarnos bastante del verdadero óptimo entero.
+\end{alertblock}
+
+\vspace{0.2cm}
+Hoy: \textbf{Branch and Bound} (ramificación y acotamiento) --- el método estándar para resolver PL entera y entera mixta, construido enteramente sobre el simplex que ya dominamos.
+\end{frame}
+
+\begin{frame}{Programación entera: tres sabores}
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}p{3.6cm}p{8.6cm}@{}}
+\toprule
+\textbf{Tipo} & \textbf{Qué exige}\\
+\midrule
+PL continua (Clase 4) & Todas las variables $\in\mathbb{R}$, $\geq0$.\\
+PL entera (pura) & \textbf{Todas} las variables $\in\mathbb{Z}$, $\geq0$.\\
+PL entera \textbf{mixta} (MIP) & \textbf{Algunas} variables $\in\mathbb{Z}$, el resto $\in\mathbb{R}$.\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.3cm}
+Hoy veremos: un ejemplo entero puro sin poda ``real'', un ejemplo entero puro \textbf{con} poda genuina, y un ejemplo mixto. Los tres, verificados numéricamente y resueltos con dos librerías de Python distintas al final.
+\end{frame}
+
+% ================= SECCION 2 =================
+\section{La idea central: relajación, ramificación y poda}
+
+\begin{frame}{Paso 1: la relajación LP}
+\begin{block}{Relajación (\emph{LP relaxation})}
+Toma el problema entero y \textbf{borra temporalmente} la exigencia de integralidad. Lo que queda es un PL continuo ordinario: lo resuelves con el simplex de la Clase 4, sin ningún cambio.
+\end{block}
+
+\begin{itemize}
+\item La región factible del problema entero es un \textbf{subconjunto} (los puntos de malla dentro) de la región factible del LP relajado.
+\item Por lo tanto, el óptimo del LP relajado es siempre \textbf{igual o mejor} que el óptimo entero real --- nunca peor.
+\item Ese valor es una \textbf{cota}: en maximización, una \textbf{cota superior} que ningún entero factible puede superar.
+\end{itemize}
+
+Si la solución del LP relajado ya sale con todas las variables enteras (declaradas como tales): \textbf{listo, es también el óptimo entero} --- no hace falta hacer nada más.
+\end{frame}
+
+\begin{frame}{Paso 2: ramificar}
+Si alguna variable entera sale fraccionaria (digamos $x_j=3.4$), ni $x_j\leq3$ ni $x_j\geq4$ excluyen ningún entero factible --- pero juntas cubren \emph{todo} lo que antes cubría $x_j$ sin restricción.
+
+\begin{block}{Ramificación (\emph{branching})}
+Se crean \textbf{dos subproblemas hijos}, idénticos al padre más una restricción adicional:
+\[
+\text{Hijo izquierdo: } x_j \leq \lfloor 3.4\rfloor = 3
+\qquad\qquad
+\text{Hijo derecho: } x_j \geq \lceil 3.4\rceil = 4
+\]
+\end{block}
+
+Cada hijo es, de nuevo, un simple problema de PL continua: se resuelve con simplex, exactamente igual que el padre. Si vuelve a salir fraccionario, se ramifica otra vez --- así se construye un \textbf{árbol} de subproblemas.
+\end{frame}
+
+\begin{frame}{Paso 3: por qué esto no es fuerza bruta --- la poda}
+Sin ningún control, el árbol de ramificación puede crecer exponencialmente (piense en cuántas variables fraccionarias pueden aparecer, en cascada). Lo que lo hace práctico es la \textbf{poda} (\emph{pruning} / \emph{fathoming}).
+
+\begin{alertblock}{La idea de la poda, en una frase}
+Como la relajación de cualquier nodo del árbol es una \textbf{cota} sobre lo mejor que se puede lograr bajando por esa rama, en cuanto esa cota deja de superar a la mejor solución entera ya encontrada, \textbf{se descarta la rama completa sin explorarla más}.
+\end{alertblock}
+
+El resto de esta clase dedica una sección entera a precisar exactamente cuándo se poda y cuándo no --- es el punto donde más fácil se confunden los estudiantes.
+\end{frame}
+
+% ================= SECCION 3 =================
+\section{El concepto de poda, a fondo}
+
+\begin{frame}{El ``incumbente''}
+\begin{block}{Definición}
+El \textbf{incumbente} es la mejor solución \textbf{entera factible} encontrada hasta el momento durante la exploración del árbol. Se actualiza cada vez que aparece una solución entera mejor; nunca empeora.
+\end{block}
+
+Al principio (antes de encontrar cualquier entero) no hay incumbente: cualquier entero factible que aparezca se vuelve el primero. A partir de ahí, cada nodo nuevo se compara contra él.
+
+\vspace{0.3cm}
+El incumbente cumple dos papeles: (1) es el candidato a \textbf{respuesta final} si no aparece nada mejor, y (2) es la \textbf{vara de medir} contra la que se prueba cada cota para decidir si podar.
+\end{frame}
+
+\begin{frame}{Tres razones distintas para terminar una rama}
+\begin{center}
+\renewcommand{\arraystretch}{1.5}
+\begin{tabular}{@{}p{3.6cm}p{8.7cm}@{}}
+\toprule
+\textbf{Razón} & \textbf{Qué pasa}\\
+\midrule
+Nodo \textbf{infactible} & El LP del nodo no tiene solución (las restricciones acumuladas se contradicen). No hay nada ahí: se descarta.\\
+Nodo da solución \textbf{entera} & Es una hoja natural: ya no queda variable entera fraccionaria. Se compara contra el incumbente; si es mejor, lo reemplaza. \textbf{No es ``poda'' en sentido estricto} --- la rama simplemente ya terminó por sí sola.\\
+Cota del nodo \textbf{no supera} al incumbente & \textbf{Poda genuina} (\emph{fathoming by bound}): aunque la solución sea fraccionaria y en principio podría ramificarse más, se descarta \textbf{sin} explorar sus hijos, porque ningún descendiente puede superar al incumbente.\\
+\bottomrule
+\end{tabular}
+\end{center}
+\end{frame}
+
+\begin{frame}{El matiz que más se confunde}
+\begin{alertblock}{Ojo con esto}
+\small Encontrar una solución entera \emph{peor} que el incumbente y descartarla \textbf{no es poda genuina} --- es solo la comparación final de una hoja que de todos modos ya no tenía a dónde seguir. \textbf{La poda de verdad ocurre \emph{antes} de llegar a un entero}: en un nodo todavía fraccionario, cuando su cota ya pierde.
+\normalsize
+\end{alertblock}
+
+\vspace{-0.1cm}
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{@{}p{5.4cm}p{5.4cm}@{}}
+\toprule
+\textbf{No es poda genuina} & \textbf{Sí es poda genuina}\\
+\midrule
+Nodo da un entero directamente, y ese entero resulta peor que el incumbente. & Nodo sigue fraccionario (tendría hijos por explorar), pero su cota ya es $\leq$ el incumbente: se descartan esos hijos \textbf{sin calcularlos}.\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\small Este matiz distingue nuestro Ejemplo 1 (ninguna poda genuina) del Ejemplo 2 (sí la hay) --- vamos a verlo con números.
+\end{frame}
+
+% ================= SECCION 4 =================
+\section{Ejemplo 1: sin poda genuina}
+
+\begin{frame}{Ejemplo 1: planteamiento}
+\begin{block}{Problema}
+\[
+\max\ z=5x_1+4x_2 \quad\text{s.a.}\quad 6x_1+4x_2\leq24,\ \ x_1+2x_2\leq6,\ \ x_1,x_2\geq0,\ \ x_1,x_2\in\mathbb{Z}
+\]
+\end{block}
+
+\textbf{Relajación LP} (resuelta con simplex, Clase 4):
+\[
+x_1^{LP}=3,\quad x_2^{LP}=1.5,\quad z^{LP}=21
+\]
+
+$x_2=1.5$ es fraccionario $\to$ no es solución entera válida, pero $z^{LP}=21$ ya nos da la \textbf{cota superior global}: ningún entero factible puede superar 21.
+
+Ramificamos sobre $x_2$: hijo izquierdo $x_2\leq1$, hijo derecho $x_2\geq2$.
+\end{frame}
+
+\begin{frame}{Ejemplo 1: resolviendo cada nodo}
+\begin{center}
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Nodo} & \textbf{Restricción} & \textbf{Solución LP} & $z$\\
+\midrule
+Raíz & --- & $(3,\ 1.5)$ & $21.00$\\
+2 & $x_2\leq1$ & $(3.33,\ 1)$ & $20.67$\\
+3 & $x_2\geq2$ & $(2,\ 2)$ --- \textbf{entero} & $18.00$\\
+4 & $x_2\leq1,\ x_1\leq3$ & $(3,\ 1)$ --- \textbf{entero} & $19.00$\\
+5 & $x_2\leq1,\ x_1\geq4$ & $(4,\ 0)$ --- \textbf{entero} & $\mathbf{20.00}$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.25cm}
+Orden de exploración: primero se agota la rama $x_2\leq1$ (nodos 4 y 5) antes de visitar el nodo 3. Al llegar al nodo 3, el incumbente ya es $20$ (del nodo 5) --- el entero del nodo 3 ($18$) queda descartado por simple comparación.
+\end{frame}
+
+\begin{frame}{Ejemplo 1: árbol completo}
+\centering
+\begin{tikzpicture}[
+  every node/.style={font=\scriptsize},
+  lp/.style={draw, rounded corners, align=center, fill=basecolor!12, minimum width=3.05cm, minimum height=1.05cm},
+  entero/.style={draw, rounded corners, align=center, fill=entra!22, minimum width=3.05cm, minimum height=1.05cm, thick},
+  peor/.style={draw, rounded corners, align=center, fill=grisclaro!25, minimum width=3.05cm, minimum height=1.05cm},
+  edgelabel/.style={font=\scriptsize, fill=white, inner sep=1pt}
+]
+\node[lp] (root) {Raíz: $x=(3,\,1.5)$\\$z=21.00$};
+\node[lp, below left=1.25cm and 0.3cm of root] (n2) {$x_2\leq1$\\$x=(3.33,\,1)$\\$z=20.67$};
+\node[peor, below right=1.25cm and 0.3cm of root] (n3) {$x_2\geq2$\\$x=(2,2)$ ENTERO\\$z=18.00$\\{\tiny peor que incumbente, descartado}};
+\node[entero, below left=1.35cm and -0.65cm of n2] (n4) {$x_1\leq3$\\$x=(3,1)$ ENTERO\\$z=19.00$};
+\node[entero, below right=1.35cm and -0.65cm of n2, fill=entra!45] (n5) {$x_1\geq4$\\$x=(4,0)$ ENTERO\\$z=\mathbf{20.00}$\\{\tiny ÓPTIMO}};
+
+\draw[-Stealth] (root) -- (n2) node[edgelabel, midway, left]{$x_2\leq1$};
+\draw[-Stealth] (root) -- (n3) node[edgelabel, midway, right]{$x_2\geq2$};
+\draw[-Stealth] (n2) -- (n4) node[edgelabel, midway, left]{$x_1\leq3$};
+\draw[-Stealth] (n2) -- (n5) node[edgelabel, midway, right]{$x_1\geq4$};
+\end{tikzpicture}
+\end{frame}
+
+\begin{frame}{Ejemplo 1: por qué NO hubo poda genuina}
+\begin{alertblock}{Revisando el matiz}
+El único nodo ``descartado'' (nodo 3, $x_2\geq2$) llegó \textbf{directo a una solución entera} ($z=18$). No teníamos ninguna cota fraccionaria que descartar de antemano --- simplemente comparamos dos hojas y nos quedamos con la mejor. \textbf{Se calcularon los 5 nodos completos}, sin ahorrarnos ningún trabajo.
+\end{alertblock}
+
+\textbf{Óptimo entero:} $x_1^\ast=4,\ x_2^\ast=0,\ z^\ast=20$.
+
+\vspace{0.3cm}
+Con esto en mente, veamos un ejemplo donde sí ocurre una poda genuina --- donde una rama fraccionaria se descarta \emph{sin} calcular sus hijos.
+\end{frame}
+
+% ================= SECCION 5 =================
+\section{Ejemplo 2: con poda genuina}
+
+\begin{frame}{Ejemplo 2: planteamiento}
+\begin{block}{Problema}
+\[
+\max\ z=5x_1+3x_2 \quad\text{s.a.}\quad 2x_1+3x_2\leq12,\ \ 3x_1+x_2\leq9,\ \ x_1,x_2\geq0,\ \ x_1,x_2\in\mathbb{Z}
+\]
+\end{block}
+
+\textbf{Relajación LP:}
+\[
+x_1^{LP}=2.1429,\quad x_2^{LP}=2.5714,\quad z^{LP}=18.4286
+\]
+
+Ambas variables fraccionarias: se ramifica sobre una (típicamente la más fraccionaria, o simplemente la primera fraccionaria en orden --- aquí $x_1$).
+\end{frame}
+
+\begin{frame}{Ejemplo 2: resolviendo el árbol}
+\vspace{-0.15cm}
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Nodo} & \textbf{Restricción acumulada} & \textbf{Solución LP} & $z$\\
+\midrule
+Raíz & --- & $(2.14,\ 2.57)$ & $18.43$\\
+2 & $x_1\leq2$ & $(2,\ 2.67)$ & $18.00$\\
+3 & $x_1\leq2,\ x_2\leq2$ & $(2,\ 2)$ --- \textbf{entero} & $16.00$\\
+4 & $x_1\leq2,\ x_2\geq3$ & $(1.5,\ 3)$ & $16.50$\\
+5 & $\ldots,\ x_1\leq1$ & $(1,\ 3.33)$ & $\mathbf{15.00}$\\
+6 & $\ldots,\ x_1\geq2$ & \textbf{infactible} & ---\\
+7 & $x_1\geq3$ & $(3,\ 0)$ --- \textbf{entero} & $15.00$\\
+\bottomrule
+\end{tabular}
+\end{center}
+\normalsize
+
+\small Tras el nodo 3, el incumbente es $16$. El nodo 5 da $x=(1,\,3.33)$ --- $x_2$ sigue fraccionario, en cualquier otro caso tocaría ramificar de nuevo. Pero $z=15\leq16$: \textbf{se poda sin calcular los hijos de este nodo}.
+\end{frame}
+
+\begin{frame}{Ejemplo 2: árbol completo}
+\centering
+\resizebox{!}{0.83\textheight}{%
+\begin{tikzpicture}[
+  every node/.style={font=\scriptsize},
+  lp/.style={draw, rounded corners, align=center, fill=basecolor!12, minimum width=2.9cm, minimum height=1.0cm},
+  entero/.style={draw, rounded corners, align=center, fill=entra!22, minimum width=2.9cm, minimum height=1.0cm, thick},
+  peor/.style={draw, rounded corners, align=center, fill=grisclaro!25, minimum width=2.9cm, minimum height=1.0cm},
+  pod/.style={draw, rounded corners, align=center, fill=podado!25, minimum width=2.9cm, minimum height=1.15cm, thick, draw=podado},
+  inf/.style={draw, dashed, rounded corners, align=center, fill=grisclaro!12, minimum width=2.9cm, minimum height=0.85cm},
+  edgelabel/.style={font=\scriptsize, fill=white, inner sep=1pt}
+]
+\node[lp] (root) {Raíz: $x=(2.14,2.57)$\\$z=18.43$};
+\node[lp, below left=1.2cm and -0.1cm of root] (n2) {$x_1\leq2$\\$x=(2,2.67)$, $z=18.00$};
+\node[peor, below right=1.2cm and 0.9cm of root] (n7) {$x_1\geq3$\\$x=(3,0)$ ENTERO\\$z=15.00$\\{\tiny peor, descartado}};
+\node[entero, below left=1.3cm and -1.0cm of n2, fill=entra!45] (n3) {$x_2\leq2$\\$x=(2,2)$ ENTERO\\$z=\mathbf{16.00}$\\{\tiny incumbente/óptimo}};
+\node[lp, below right=1.3cm and -0.9cm of n2] (n4) {$x_2\geq3$\\$x=(1.5,3)$, $z=16.50$};
+\node[pod, below left=1.35cm and -1.0cm of n4] (n5) {$x_1\leq1$\\$x=(1,3.33)$\\$z=15.00\leq16$\\\textbf{PODADO (cota)}};
+\node[inf, below right=1.35cm and -0.9cm of n4] (n6) {$x_1\geq2$\\\textbf{INFACTIBLE}};
+
+\draw[-Stealth] (root) -- (n2) node[edgelabel, midway, left]{$x_1\leq2$};
+\draw[-Stealth] (root) -- (n7) node[edgelabel, midway, right]{$x_1\geq3$};
+\draw[-Stealth] (n2) -- (n3) node[edgelabel, midway, left]{$x_2\leq2$};
+\draw[-Stealth] (n2) -- (n4) node[edgelabel, midway, right]{$x_2\geq3$};
+\draw[-Stealth] (n4) -- (n5) node[edgelabel, midway, left]{$x_1\leq1$};
+\draw[-Stealth] (n4) -- (n6) node[edgelabel, midway, right]{$x_1\geq2$};
+\end{tikzpicture}%
+}
+\end{frame}
+
+\begin{frame}{Ejemplo 2: cuantificando el ahorro}
+\begin{alertblock}{Lo que la poda nos ahorró}
+El nodo 5 tenía $x_2=3.33$ fraccionario. Sin poda, habría que ramificar sobre $x_2$: crear un hijo $x_2\leq3$ y otro $x_2\geq4$, resolver ambos LP, y potencialmente seguir ramificando si alguno vuelve a salir fraccionario. \textbf{Ninguno de esos cálculos se hizo} --- se descartaron de un solo golpe porque $15\leq16$ hacía imposible que mejoraran el incumbente.
+\end{alertblock}
+
+\textbf{Óptimo entero:} $x_1^\ast=2,\ x_2^\ast=2,\ z^\ast=16$.
+
+\vspace{0.3cm}
+En árboles pequeños como este el ahorro parece modesto (2 nodos hijos menos). En problemas reales, con decenas de variables enteras, la poda es lo que hace la diferencia entre un problema que se resuelve en segundos y uno que nunca termina.
+\end{frame}
+
+% ================= SECCION 6 =================
+\section{Ejemplo 3: entero mixto}
+
+\begin{frame}{Ejemplo 3: la única regla que cambia}
+\begin{block}{Recordatorio}
+En PL entera \textbf{mixta}, solo se revisa fraccionalidad --- y solo se ramifica --- sobre las variables \textbf{declaradas enteras}. Las variables continuas pueden quedar con cualquier valor decimal: nunca generan ramificación, y no impiden que un nodo sea una hoja válida.
+\end{block}
+
+\begin{block}{Problema}
+\[
+\max\ z=8x_1+5x_2 \quad\text{s.a.}\quad x_1+x_2\leq6,\ \ 9x_1+5x_2\leq45,\ \ x_1,x_2\geq0,\ \ \mathbf{x_1\in\mathbb{Z}},\ x_2\in\mathbb{R}
+\]
+\end{block}
+
+\textbf{Relajación LP:} $x_1^{LP}=3.75,\ x_2^{LP}=2.25,\ z^{LP}=41.25$. Solo miramos $x_1=3.75$: fraccionario $\to$ ramificar sobre $x_1$ únicamente.
+\end{frame}
+
+\begin{frame}{Ejemplo 3: árbol (solo 2 niveles)}
+\centering
+\begin{tikzpicture}[
+  every node/.style={font=\scriptsize},
+  lp/.style={draw, rounded corners, align=center, fill=basecolor!12, minimum width=3.6cm, minimum height=1.05cm},
+  entero/.style={draw, rounded corners, align=center, fill=entra!22, minimum width=3.6cm, minimum height=1.05cm, thick},
+  edgelabel/.style={font=\scriptsize, fill=white, inner sep=1pt}
+]
+\node[lp] (root) {Raíz: $x=(3.75,\,2.25)$\\$z=41.25$};
+\node[entero, below left=1.4cm and 0.2cm of root] (n2) {$x_1\leq3$\\$x=(3,\,3)$\\$x_1$ entero $\to$ HOJA\\$z=39.00$};
+\node[entero, below right=1.4cm and 0.2cm of root, fill=entra!45] (n3) {$x_1\geq4$\\$x=(4,\,1.8)$\\$x_1$ entero $\to$ HOJA\\($x_2=1.8$ no importa)\\$z=\mathbf{41.00}$ ÓPTIMO};
+
+\draw[-Stealth] (root) -- (n2) node[edgelabel, midway, left]{$x_1\leq3$};
+\draw[-Stealth] (root) -- (n3) node[edgelabel, midway, right]{$x_1\geq4$};
+\end{tikzpicture}
+
+\vspace{0.3cm}
+{\footnotesize Ambos hijos ya son hojas válidas apenas $x_1$ sale entero --- $x_2$ nunca se revisa ni se ramifica, aunque sea decimal en los dos casos.}
+\end{frame}
+
+\begin{frame}{Ejemplo 3: comparación con el caso entero puro}
+\small
+\begin{center}
+\renewcommand{\arraystretch}{1.0}
+\begin{tabular}{@{}p{4.0cm}p{3.4cm}p{3.4cm}@{}}
+\toprule
+& \textbf{Entera pura} & \textbf{Entera mixta}\\
+\midrule
+¿Qué se revisa? & Todas & Solo enteras declaradas\\
+¿Sobre qué se ramifica? & Cualquier fraccionaria & Solo enteras fraccionarias\\
+¿Cuándo es hoja? & Todas enteras & Declaradas enteras ya enteras\\
+Poda, cota, incumbente & Igual & Igual\\
+\bottomrule
+\end{tabular}
+\end{center}
+\normalsize
+
+\textbf{Óptimo:} $x_1^\ast=4,\ x_2^\ast=1.8,\ z^\ast=41$.
+
+\begin{alertblock}{La idea para llevar}
+\small B\&B no distingue entre PL entera pura y mixta a nivel de algoritmo: la única diferencia vive en la pregunta ``¿esta solución ya es válida?'' hecha en cada hoja.
+\normalsize
+\end{alertblock}
+\end{frame}
+
+% ================= SECCION 7 =================
+\section{Verificación computacional}
+
+\begin{frame}[fragile]{Código 1: \texttt{scipy.optimize.milp}}
+\texttt{scipy} incluye un solver de PL entera mixta desde la versión 1.9, construido sobre HiGHS (branch-and-bound + planos de corte en C++):
+
+\begin{lstlisting}[language=Python]
+from scipy.optimize import milp, LinearConstraint, Bounds
+
+res = milp(
+    c=[-5, -4],                 # milp SIEMPRE minimiza
+    constraints=LinearConstraint([[6,4],[1,2]], -float("inf"), [24,6]),
+    integrality=[1, 1],         # 1=entera, 0=continua; por variable
+    bounds=Bounds(0, float("inf")),
+)
+print(res.x, -res.fun)    # -> [4. 0.]  20.0
+\end{lstlisting}
+
+\texttt{integrality} es un vector: \texttt{1} marca cada variable que debe ser entera, \texttt{0} la deja continua --- así se resuelven, con la misma función, tanto el caso puro como el mixto (Ejemplo 3 solo cambia a \texttt{integrality=[1,0]}).
+\end{frame}
+
+\begin{frame}{Resultados de \texttt{milp} en los 3 ejemplos}
+\begin{center}
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+& \textbf{Ejemplo 1} & \textbf{Ejemplo 2} & \textbf{Ejemplo 3 (mixto)}\\
+\midrule
+\texttt{integrality} & \texttt{[1,1]} & \texttt{[1,1]} & \texttt{[1,0]}\\
+$x^\ast$ & $(4,\ 0)$ & $(2,\ 2)$ & $(4,\ 1.8)$\\
+$z^\ast$ & $20$ & $16$ & $41$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.3cm}
+Los tres coinciden exactamente con lo obtenido a mano, nodo por nodo, en las secciones anteriores.
+\end{frame}
+
+\begin{frame}[fragile]{Código 2: \texttt{PuLP} (alternativa recomendada)}
+\texttt{PuLP} escribe el modelo de forma \textbf{declarativa} --- casi como en el papel, sin armar matrices $A,b,c$ a mano. Por dentro llama al solver libre \texttt{CBC} (COIN-OR Branch and Cut), que hace el mismo branch and bound que vimos (más refinamientos como planos de corte):
+
+\begin{lstlisting}[language=Python]
+import pulp
+
+prob = pulp.LpProblem("mip", pulp.LpMaximize)
+x1 = pulp.LpVariable("x1", lowBound=0, cat="Integer")
+x2 = pulp.LpVariable("x2", lowBound=0, cat="Integer")
+
+prob += 5*x1 + 4*x2                    # funcion objetivo
+prob += 6*x1 + 4*x2 <= 24
+prob += x1 + 2*x2 <= 6
+
+prob.solve(pulp.PULP_CBC_CMD(msg=0))
+print(x1.value(), x2.value(), pulp.value(prob.objective))  # 4.0 0.0 20.0
+\end{lstlisting}
+
+Instalación: \texttt{pip install pulp} (CBC viene empaquetado, no se instala aparte).
+\end{frame}
+
+\begin{frame}{\texttt{scipy.optimize.milp} vs. \texttt{PuLP}: ¿cuándo cuál?}
+\small
+\begin{center}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}p{2.6cm}p{4.3cm}p{4.3cm}@{}}
+\toprule
+& \textbf{\texttt{scipy.optimize.milp}} & \textbf{PuLP + CBC}\\
+\midrule
+Sintaxis & Matricial ($A,b,c$, como en la Clase 4) & Declarativa (``como en el papel'')\\
+Solver interno & HiGHS (C++, el mismo de \texttt{linprog}) & CBC (COIN-OR), intercambiable\\
+Cuándo conviene & Ya se tiene el modelo matricial, o se usa solo scipy & Modelos grandes/legibles, buena para enseñar\\
+\bottomrule
+\end{tabular}
+\end{center}
+\normalsize
+
+\vspace{0.1cm}
+\small Otras alternativas del mismo estilo declarativo: \texttt{OR-Tools} (Google, CP-SAT muy fuerte en variables binarias), \texttt{Pyomo} (más general, cambia de solver fácilmente), y los solvers comerciales \texttt{Gurobi} / \texttt{CPLEX} (mucho más rápidos en problemas grandes, con licencia académica gratuita).
+\end{frame}
+
+% ================= SECCION 8 =================
+\section{Síntesis y cierre}
+
+\begin{frame}{Mapa conceptual de Branch and Bound}
+\begin{center}
+\resizebox{!}{0.82\textheight}{%
+\begin{tikzpicture}[
+  node distance=0.4cm and 0.9cm,
+  box/.style={draw, rounded corners, align=center, fill=basecolor!12, minimum width=3.6cm, minimum height=0.9cm, font=\small},
+  decision/.style={draw, diamond, align=center, fill=entra!12, minimum width=3.1cm, minimum height=0.9cm, font=\small, aspect=2.3},
+  arr/.style={-Stealth, thick}
+]
+\node[box] (init) {Tomar un nodo (empieza\\con la relajación LP)};
+\node[box, below=of init] (solve) {Resolver su LP con simplex};
+\node[decision, below=of solve] (feas) {¿Infactible?};
+\node[box, right=1.5cm of feas] (podainf) {PODAR\\(no hay nada ahí)};
+\node[decision, below=of feas] (bound) {¿Cota $\leq$\\incumbente?};
+\node[box, right=1.5cm of bound] (podabound) {PODAR\\(por cota)};
+\node[decision, below=of bound] (intg) {¿Enteras\\ya enteras?};
+\node[box, right=1.5cm of intg] (leaf) {Hoja válida:\\actualizar incumbente\\si mejora};
+\node[box, below=of intg] (branch) {Ramificar sobre una\\variable entera fraccionaria};
+
+\draw[arr] (init) -- (solve);
+\draw[arr] (solve) -- (feas);
+\draw[arr] (feas) -- node[above, font=\scriptsize]{sí} (podainf);
+\draw[arr] (feas) -- node[left, font=\scriptsize]{no} (bound);
+\draw[arr] (bound) -- node[above, font=\scriptsize]{sí} (podabound);
+\draw[arr] (bound) -- node[left, font=\scriptsize]{no} (intg);
+\draw[arr] (intg) -- node[above, font=\scriptsize]{sí} (leaf);
+\draw[arr] (intg) -- node[left, font=\scriptsize]{no} (branch);
+\draw[arr] (branch.west) -- ++(-3.0,0) |- (solve.west);
+\end{tikzpicture}%
+}
+\end{center}
+\end{frame}
+
+\begin{frame}{Fuerza bruta vs. Branch and Bound}
+Recordando la Clase 4: fuerza bruta en PL continua enumeraba $\binom{n}{m}$ vértices. En PL entera, el equivalente de fuerza bruta sería enumerar \textbf{todos} los puntos enteros dentro de la región factible.
+
+\begin{block}{Por qué B\&B gana}
+B\&B nunca calcula un nodo cuya cota ya pierde contra el incumbente. Cada poda elimina, de un solo golpe, \textbf{todo un subárbol} que fuerza bruta habría tenido que recorrer entero. En problemas con decenas o cientos de variables enteras, esta diferencia es la que separa un problema resoluble de uno computacionalmente imposible.
+\end{block}
+
+\textbf{Para tus estudiantes, en una frase:} B\&B no es un algoritmo nuevo --- es el simplex de la Clase 4, orquestado en un árbol con una regla de poda encima.
+\end{frame}
+
+\begin{frame}{Lo que ya sabemos hacer}
+\begin{itemize}
+\item Construir la relajación LP de un problema entero y leerla como cota.
+\item Ramificar sobre una variable fraccionaria sin perder soluciones enteras.
+\item Distinguir con precisión una poda genuina (por cota, antes de terminar la rama) de una simple comparación entre hojas.
+\item Resolver un árbol de B\&B completo a mano, para problemas enteros puros y mixtos.
+\item Verificar cualquier resultado con \texttt{scipy.optimize.milp} o con \texttt{PuLP}.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Lo que falta (próxima clase / roadmap)}
+\begin{itemize}
+\item \textbf{Variables binarias} (0/1): el caso especial más común en la práctica (decisiones sí/no) --- mismo B\&B, ramificación siempre en $x_j=0$ vs. $x_j=1$.
+\item \textbf{Planos de corte} (\emph{cutting planes}): en vez de solo ramificar, añadir automáticamente restricciones válidas que ``cortan'' la solución fraccionaria sin eliminar ningún entero --- lo que usan CBC y HiGHS por dentro, combinado con B\&B (\emph{branch and cut}).
+\item \textbf{Estrategias de selección}: qué variable fraccionaria ramificar primero, y en qué orden explorar el árbol (profundidad vs. mejor cota primero) --- afecta mucho el tiempo de cómputo en problemas grandes.
+\item Esto conecta con el roadmap general del curso: tras PL y PL entera, el siguiente territorio natural es la programación no lineal con restricciones (SQP, barreras) ya anticipada en la Clase 4.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Ejercicios propuestos}
+\small
+\begin{enumerate}
+\setlength{\itemsep}{2pt}
+\item Resuelva a mano el árbol de B\&B para $\max z=3x_1+2x_2$ s.a. $x_1+x_2\leq4,\ x_1\leq3,\ x_2\leq3,\ x_1,x_2\in\mathbb{Z}$. ¿Hay poda genuina?
+\item Para el Ejemplo 2 de la clase, en vez de ramificar primero sobre $x_1$, intente ramificar primero sobre $x_2$ en la raíz. ¿Llega al mismo óptimo? ¿El árbol tiene el mismo número de nodos?
+\item Modifique el Ejemplo 3 declarando también $x_2$ como entera. Resuelva el nuevo árbol y compare cuántos nodos hacen falta frente a la versión mixta.
+\item Investigue qué es una variable binaria y reescriba el Ejemplo 1 usando una variable $y\in\{0,1\}$ que module si se usa o no la restricción $x_1\leq4$ (pista: técnica de ``Big M'').
+\item Verifique los tres ejemplos de la clase con \texttt{OR-Tools} (CP-SAT) y compare el número de nodos explorados que reporta contra los que calculamos a mano.
+\item ¿Qué pasaría si, en el Ejemplo 2, el incumbente inicial fuera $17$ en vez de $16$ al llegar al nodo 5? Verifique si la poda seguiría aplicando.
+\end{enumerate}
+\end{frame}
+
+\begin{frame}{Referencias}
+\small
+\begin{itemize}
+\setlength{\itemsep}{1pt}
+\item Wolsey, L. A. (2020). \emph{Integer Programming} (2nd ed.). Wiley.
+\item Nemhauser, G. L., \& Wolsey, L. A. (1988). \emph{Integer and Combinatorial Optimization}. Wiley.
+\item Land, A. H., \& Doig, A. G. (1960). ``An automatic method of solving discrete programming problems''. \emph{Econometrica}, 28(3), 497--520. (Origen histórico de Branch and Bound.)
+\item Bertsimas, D., \& Weismantel, R. (2005). \emph{Optimization over Integers}. Dynamic Ideas.
+\item Mitchell, S., O'Sullivan, M., \& Dunning, I. (2011). \emph{PuLP: A Linear Programming Toolkit for Python}. Documentación oficial: \url{https://coin-or.github.io/pulp/}.
+\item Virtanen, P., et al. (2020). ``SciPy 1.0: fundamental algorithms for scientific computing in Python''. \emph{Nature Methods}, 17, 261--272.
+\item Forrest, J., \& Lougee-Heimer, R. (2005). \emph{CBC User Guide}. COIN-OR Foundation.
+\item Nocedal, J., \& Wright, S. J. (2006). \emph{Numerical Optimization} (2nd ed.), Cap. 13. Springer.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{}
+\centering
+{\Large\textbf{Gracias}}
+
+\vspace{0.4cm}
+\normalsize Preguntas y discusión
+\end{frame}
+
+\end{document}

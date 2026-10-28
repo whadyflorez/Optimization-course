@@ -1,0 +1,420 @@
+\documentclass[aspectratio=169]{beamer}
+\usetheme{Metropolis}
+\setbeamertemplate{blocks}[default]
+
+\usepackage[utf8]{inputenc}
+\usepackage[spanish,es-tabla]{babel}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{listings}
+
+\definecolor{entra}{HTML}{2E7D32}
+\definecolor{sale}{HTML}{8C1D40}
+\definecolor{pivcolor}{HTML}{D2691E}
+\definecolor{basecolor}{HTML}{3B7EA1}
+\definecolor{podado}{HTML}{B0413E}
+
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  breaklines=true,
+  columns=fullflexible,
+  keywordstyle=\color{basecolor}\bfseries,
+  commentstyle=\color{gray},
+  stringstyle=\color{entra}
+}
+
+\title{Complemento a la Clase 4: Infactibilidad y el Método de Dos Fases}
+\subtitle{El cuarto caso especial de la Programación Lineal}
+\author{Métodos de Optimización --- Maestría}
+\institute{Universidad Pontificia Bolivariana}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+% ================= SECCION 1 =================
+\section{El cuarto caso especial}
+
+\begin{frame}{Lo que ya vimos en la Clase 4}
+En la Clase 4 cubrimos tres desenlaces especiales del simplex:
+
+\begin{enumerate}
+\item \textbf{Óptimos múltiples}: un coeficiente exactamente cero en la fila $z$ de una no básica al terminar.
+\item \textbf{No acotado}: una columna entrante sin ninguna razón positiva --- $z\to\infty$.
+\item \textbf{Degeneración}: empate en la razón mínima, riesgo de ciclado, regla de Bland.
+\end{enumerate}
+
+\begin{alertblock}{Lo que faltó}
+Un cuarto caso: \textbf{infactibilidad} --- la región factible está \emph{vacía}, no existe ningún punto que cumpla todas las restricciones a la vez. No es un ``tipo'' de degeneración ni de ningún otro caso ya visto: es una falla distinta y anterior.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{¿Por qué nunca lo vimos en la Clase 4?}
+No fue casualidad --- fue consecuencia directa de cómo construimos \emph{todos} los ejemplos de esa clase.
+
+\begin{block}{El truco que usamos siempre}
+Con restricciones $\leq$ y $b_i\geq0$, la variable de holgura da un arranque \textbf{garantizado}: $x=0$, todas las holguras $=b_i\geq0$. El sistema ya viene diagonalizado, factible, sin ningún trabajo.
+\end{block}
+
+Nunca introdujimos una restricción $\geq$ o $=$ --- así que nunca le dimos al simplex la oportunidad de toparse con un problema sin solución. Ese arranque garantizado es, precisamente, lo que se pierde con $\geq$ o $=$.
+\end{frame}
+
+% ================= SECCION 2 =================
+\section{El problema de arrancar con restricciones $\geq$}
+
+\begin{frame}{El excedente no resuelve el problema de arranque}
+Para $x_1\geq3$, la forma estándar es $x_1-s_1=3$ con $s_1\geq0$ (variable de \textbf{exceso}, no de holgura). Algebraicamente es perfecta. El problema es \textbf{arrancar} el simplex desde ahí.
+
+Intenta el mismo truco de siempre: fija $x_1=0$ (no básica), trata $s_1$ como básica:
+\[
+-s_1=3 \quad\Rightarrow\quad s_1=-3
+\]
+
+\begin{alertblock}{Viola $s_1\geq0$}
+Ese punto de arranque no es factible. El signo del excedente ($-s_1$, no $+s_1$) es justo la diferencia con la holgura de $\leq$.
+\end{alertblock}
+
+\textbf{¿Y usar $x_1$ mismo como básica?} Si $x_1\geq3$ fuera la \emph{única} restricción, sí --- pero en un problema real $x_1$ suele aparecer en varias filas más, y una variable básica necesita una columna ``limpia'' (un $1$ en su fila, $0$ en las demás). La columna real de $x_1$ casi nunca cumple eso.
+\end{frame}
+
+\begin{frame}{La variable artificial: un truco puramente mecánico}
+Se agrega una \textbf{variable artificial} $a_1\geq0$, construida a propósito para tener columna limpia:
+\[
+x_1-s_1+a_1=3
+\]
+
+Fija $x_1=s_1=0$ (no básicas), lee $a_1=3\geq0$ directo --- \textbf{factible de inmediato}, exactamente el mismo arranque gratis que dábamos por sentado con las holguras.
+
+\begin{block}{El precio}
+$a_1$ no es una cantidad real del problema --- es un valor ``de mentiras'' que presta un punto de partida. Por eso hay que \textbf{forzarla a valer cero} antes de confiar en cualquier resultado. Eso es exactamente lo que hace la \textbf{Fase 1}.
+\end{block}
+\end{frame}
+
+% ================= SECCION 3 =================
+\section{El método de Dos Fases}
+
+\begin{frame}{Fase 1: minimizar la suma de artificiales}
+\begin{block}{Fase 1}
+\small Se resuelve un simplex auxiliar cuyo único objetivo es
+\[
+\min\ w=\sum_i a_i \qquad\text{(equivalentemente, } \max\ w'=-w\text{)}
+\]
+usando \textbf{el mismo simplex de siempre} --- misma regla de entrada, misma razón mínima, mismo Gauss-Jordan.
+\normalsize
+\end{block}
+
+\vspace{-0.1cm}
+\begin{alertblock}{El criterio que decide todo}
+\small Al terminar Fase 1:
+\begin{itemize}
+\item Si $w=0$ (todas las artificiales en cero): se encontró un punto \textbf{genuinamente factible}. Se descartan las columnas artificiales y se pasa a Fase 2.
+\item Si $w>0$ (el mínimo posible de $w$ es positivo): \textbf{no existe} ningún punto que cumpla todas las restricciones. El problema es \textbf{infactible}. Punto final --- no hay Fase 2.
+\end{itemize}
+\normalsize
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Fase 2: optimizar el objetivo real}
+Si Fase 1 terminó con $w=0$:
+
+\begin{enumerate}
+\item Se \textbf{descartan las columnas de las variables artificiales} por completo (nunca vuelven a entrar a la base).
+\item Se \textbf{restaura la fila $z$ real} del problema original, sobre la base factible que dejó la Fase 1.
+\item Se continúa el simplex \textbf{normal} (el de la Clase 4) hasta el criterio de optimalidad de siempre.
+\end{enumerate}
+
+\begin{alertblock}{La idea completa, en una frase}
+Dos Fases no es un algoritmo nuevo: es el simplex de la Clase 4, corrido \textbf{dos veces} --- primero con un objetivo prestado que solo busca un punto de partida factible, y luego con el objetivo real, sobre la base que la primera corrida dejó lista.
+\end{alertblock}
+\end{frame}
+
+% ================= SECCION 4 =================
+\section{Ejemplo A: factible tras Fase 1}
+
+\begin{frame}{Ejemplo A: planteamiento}
+\begin{block}{Problema}
+\[
+\max\ z=2x_1+3x_2 \quad\text{s.a.}\quad x_1+x_2\leq4,\ \ x_1+2x_2\geq4,\ \ x_1,x_2\geq0
+\]
+\end{block}
+
+En el origen ($x_1=x_2=0$), la segunda restricción da $0\geq4$: \textbf{falsa}. El origen no es factible --- por eso hace falta Fase 1 aquí, a diferencia de todos los ejemplos de la Clase 4.
+
+Forma estándar: $x_1+x_2+s_1=4$ (holgura normal) y $x_1+2x_2-s_2+a_1=4$ (excedente + artificial).
+\end{frame}
+
+\begin{frame}{Ejemplo A: Fase 1, tableau inicial}
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{c|cccc|c}
+\textbf{Base} & $x_1$ & $x_2$ & $s_1$ & $s_2$ & $b$ \\
+\hline
+$s_1$ & $1$ & $1$ & $1$ & $0$ & $4$ \\
+$a_1$ & $1$ & $2$ & $0$ & $-1$ & $4$ \\
+\hline
+$w'$ & $-1$ & \cellcolor{entra!20}$-2$ & $0$ & $1$ & $-4$ \\
+\end{tabular}
+\end{center}
+
+\vspace{0.2cm}
+(Columna $a_1$ omitida tras eliminarla de su propia fila en la fila $w'$; su coeficiente ya es $0$ ahí por construcción.) Coeficiente más negativo: $x_2$ ($-2$) $\to$ entra $x_2$. Razón mínima: $\min(4/1,\ 4/2)=2\to$ sale $a_1$.
+\end{frame}
+
+\begin{frame}{Ejemplo A: Fase 1, tras pivotear --- ya factible}
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{c|cccc|c}
+\textbf{Base} & $x_1$ & $x_2$ & $s_1$ & $s_2$ & $b$ \\
+\hline
+$s_1$ & $1/2$ & $0$ & $1$ & $1/2$ & $2$ \\
+$x_2$ & $1/2$ & $1$ & $0$ & $-1/2$ & $2$ \\
+\hline
+$w'$ & $0$ & $0$ & $0$ & $0$ & $\mathbf{0}$ \\
+\end{tabular}
+\end{center}
+
+\begin{alertblock}{$w=0$: FACTIBLE}
+Se encontró un punto real: $x_1=0,\ x_2=2$ ($a_1$ ya no aparece, quedó en $0$). Sin coeficientes negativos en $w'$: Fase 1 terminada. \textbf{Se descarta la columna $a_1$} y se pasa a Fase 2 con la base $\{s_1,x_2\}$ tal cual quedó.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Ejemplo A: Fase 2, tableau inicial}
+Se restaura $z=2x_1+3x_2$ sobre la base $\{s_1,x_2\}$ heredada de Fase 1 (columna $a_1$ ya no existe):
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{c|ccc|c}
+\textbf{Base} & $x_1$ & $x_2$ & $s_2$ & $b$ \\
+\hline
+$s_1$ & $1/2$ & $0$ & $1/2$ & $2$ \\
+$x_2$ & $1/2$ & $1$ & $-1/2$ & $2$ \\
+\hline
+$z$ & \cellcolor{entra!20}$-1/2$ & $0$ & $-3/2$ & $6$ \\
+\end{tabular}
+\end{center}
+
+$z=6+0.5x_1+1.5s_2$: todavía no óptimo (dos coeficientes positivos en la lectura real). Entra $s_2$ (mayor). Razón mínima: solo $s_1$ tiene coeficiente positivo en $s_2$ $\to$ $\min(2/0.5)=4\to$ sale $s_1$.
+\end{frame}
+
+\begin{frame}{Ejemplo A: Fase 2, óptimo}
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{c|ccc|c}
+\textbf{Base} & $x_1$ & $x_2$ & $s_2$ & $b$ \\
+\hline
+$s_2$ & $1$ & $0$ & $1$ & $4$ \\
+$x_2$ & $1$ & $1$ & $0$ & $4$ \\
+\hline
+$z$ & $1$ & $0$ & $0$ & $\mathbf{12}$ \\
+\end{tabular}
+\end{center}
+
+Sin coeficientes positivos reales (fila $z$: $z=12-x_1$): \textbf{óptimo}. $x_1^\ast=0,\ x_2^\ast=4,\ z^\ast=12$.
+
+\begin{block}{Verificación geométrica}
+En $(0,4)$: $x_1+x_2=4\leq4$ (holgura $s_1=0$, se agotó) y $x_1+2x_2=8\geq4$ (excedente $s_2=4$, sobra). Ambas restricciones se cumplen --- consistente con lo que el tableau final reporta.
+\end{block}
+\end{frame}
+
+% ================= SECCION 5 =================
+\section{Ejemplo B: infactible}
+
+\begin{frame}{Ejemplo B: el nodo del árbol de la Clase 5}
+Recordemos el nodo que generó tu pregunta original: dentro del árbol de Branch and Bound del Ejemplo 2 de la Clase 5, un nodo heredaba
+\[
+2x_1+3x_2\leq12 \quad(\text{original}), \qquad x_1\geq2, \qquad x_2\geq3
+\]
+(más $x_1\leq2$, que aquí tratamos como cota de variable, no como fila --- igual que discutimos en el chat).
+
+Forma estándar de las partes ``difíciles'': $x_1-s_2+a_1=2$ y $x_2-s_3+a_2=3$, cada una con su propia artificial.
+\end{frame}
+
+\begin{frame}{Ejemplo B: Fase 1, tableau inicial}
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\small
+\begin{tabular}{c|ccccc|c}
+\textbf{Base} & $x_1$ & $x_2$ & $s_1$ & $s_2$ & $s_3$ & $b$ \\
+\hline
+$s_1$ & $2$ & $3$ & $1$ & $0$ & $0$ & $12$ \\
+$a_1$ & $1$ & $0$ & $0$ & $-1$ & $0$ & $2$ \\
+$a_2$ & $0$ & $1$ & $0$ & $0$ & $-1$ & $3$ \\
+\hline
+$w'$ & \cellcolor{entra!20}$-1$ & $-1$ & $0$ & $1$ & $1$ & $-5$ \\
+\end{tabular}
+\end{center}
+\normalsize
+
+\vspace{0.2cm}
+Dos candidatas empatadas ($x_1,x_2$ ambas con $-1$); tomamos $x_1$. Razón mínima: $\min(12/2,\ 2/1)=2\to$ sale $a_1$.
+\end{frame}
+
+\begin{frame}{Ejemplo B: Fase 1, iteración 1}
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\small
+\begin{tabular}{c|ccccc|c}
+\textbf{Base} & $x_1$ & $x_2$ & $s_1$ & $s_2$ & $s_3$ & $b$ \\
+\hline
+$s_1$ & $0$ & $3$ & $1$ & $2$ & $0$ & $8$ \\
+$x_1$ & $1$ & $0$ & $0$ & $-1$ & $0$ & $2$ \\
+$a_2$ & $0$ & $1$ & $0$ & $0$ & $-1$ & $3$ \\
+\hline
+$w'$ & $0$ & \cellcolor{entra!20}$-1$ & $0$ & $0$ & $1$ & $-3$ \\
+\end{tabular}
+\end{center}
+\normalsize
+
+\vspace{0.2cm}
+Entra $x_2$ (único coeficiente negativo). Razón mínima: $\min(8/3,\ 3/1)=8/3\to$ sale $s_1$.
+\end{frame}
+
+\begin{frame}{Ejemplo B: Fase 1, óptimo --- $w>0$}
+\begin{center}
+\renewcommand{\arraystretch}{1.2}
+\small
+\begin{tabular}{c|ccccc|c}
+\textbf{Base} & $x_1$ & $x_2$ & $s_1$ & $s_2$ & $s_3$ & $b$ \\
+\hline
+$x_2$ & $0$ & $1$ & $1/3$ & $2/3$ & $0$ & $8/3$ \\
+$x_1$ & $1$ & $0$ & $0$ & $-1$ & $0$ & $2$ \\
+$a_2$ & $0$ & $0$ & $-1/3$ & $-2/3$ & $-1$ & $\mathbf{1/3}$ \\
+\hline
+$w'$ & $0$ & $0$ & $1/3$ & $2/3$ & $1$ & $\mathbf{-1/3}$ \\
+\end{tabular}
+\end{center}
+\normalsize
+
+\begin{alertblock}{$w=1/3>0$: INFACTIBLE}
+Sin coeficientes negativos en $w'$: Fase 1 terminó, pero el mínimo posible de $a_1+a_2$ es $1/3$, \textbf{no cero}. No existe ningún punto que cumpla las tres restricciones simultáneamente --- esto explica por qué scipy reportaba ese nodo como infeasible.
+\end{alertblock}
+\end{frame}
+
+\begin{frame}{Ejemplo B: leyendo la infactibilidad en números reales}
+En el óptimo de Fase 1: $x_1=2,\ x_2=8/3\approx2.667,\ a_2=1/3$.
+
+\begin{block}{Interpretación}
+El simplex \textbf{sí encontró} el mejor compromiso posible: con $x_1=2$ fijo, la restricción de recursos $2x_1+3x_2\leq12$ solo permite $x_2\leq8/3$. Pero la restricción heredada exige $x_2\geq3$. Le faltan exactamente $3-8/3=1/3$ unidades para cumplirla --- eso es literalmente lo que mide $a_2=1/3$: \textbf{cuánto le falta} a la mejor solución posible para ser genuinamente factible.
+\end{block}
+
+Esto coincide exactamente con lo que ya habíamos deducido a mano en el chat, sin Fase 1: sustituyendo $x_1=2$ en $2x_1+3x_2\leq12$ se obtiene $x_2\leq8/3$, que contradice $x_2\geq3$.
+\end{frame}
+
+\begin{frame}{El certificado de infactibilidad}
+\begin{block}{No es una conjetura --- es una prueba}
+Multiplica la restricción de recursos por $1$ y la restricción $x_2\geq3$ (escrita como $-x_2\leq-3$) por $3$, y súmalas:
+\[
+1\times(2x_1+3x_2\leq12) \ + \ 3\times(-x_2\leq-3) \quad\text{con } x_1=2 \text{ fijo}
+\]
+\[
+\Rightarrow\quad 3x_2\leq8 \qquad\text{y}\qquad 3x_2\geq9 \qquad\Rightarrow\qquad 9\leq8
+\]
+\end{block}
+
+\textbf{$9\leq8$ es una contradicción directa.} Esta combinación (con coeficientes $1$ y $3$) es exactamente lo que los coeficientes finales de $s_1$ y $s_3$ en la fila $w'$ ($1/3$ y $1$, escalados) codifican algebraicamente. Se llama \textbf{certificado de infactibilidad} (Lema de Farkas): una combinación de tus propias restricciones que prueba, sin lugar a dudas, que ninguna solución puede existir.
+\end{frame}
+
+% ================= SECCION 6 =================
+\section{Alternativa: el método de la Gran M}
+
+\begin{frame}{Big M: la misma idea, un solo objetivo}
+\begin{block}{Método de la Gran M}
+\small En vez de dos fases separadas, se penaliza cada artificial directamente en el objetivo \textbf{real} con un coeficiente enorme $M$:
+\[
+\max\ z = 2x_1+3x_2 - M a_1 \qquad (M \text{ muy grande, p.ej. } M=1000)
+\]
+\normalsize
+\end{block}
+
+\vspace{-0.1cm}
+\small Como $M$ es enorme, el simplex \textbf{siempre} preferirá sacar cualquier artificial de la base antes que tolerar su penalización --- el efecto práctico es casi idéntico a Fase 1, pero en una sola corrida.
+
+\begin{alertblock}{La desventaja}
+\small $M$ debe ser ``suficientemente grande'', pero no hay una regla universal de cuánto --- un $M$ mal elegido puede causar errores numéricos (redondeo). Por eso los solvers profesionales casi siempre prefieren Dos Fases o variantes más robustas.
+\normalsize
+\end{alertblock}
+\end{frame}
+
+% ================= SECCION 7 =================
+\section{Verificación y síntesis}
+
+\begin{frame}[fragile]{Verificación: \texttt{scipy} detecta la infactibilidad directo}
+\begin{lstlisting}[language=Python]
+from scipy.optimize import linprog
+
+# Ejemplo B: 2x1+3x2<=12, x1>=2, x2>=3
+res = linprog(
+    c=[0, 0],
+    A_ub=[[2, 3], [-1, 0], [0, -1]],
+    b_ub=[12, -2, -3],
+    bounds=[(0, None), (0, None)],
+    method="highs",
+)
+print(res.status, res.message)
+# -> 2  The problem is infeasible.
+\end{lstlisting}
+
+Por dentro, HiGHS corre su propia variante de Fase 1 (o un método de punto interior con detección de infactibilidad) --- el \texttt{status} que devuelve es la misma conclusión que llegamos a mano.
+\end{frame}
+
+\begin{frame}{Los cuatro casos especiales de PL --- síntesis actualizada}
+\begin{center}
+\small
+\renewcommand{\arraystretch}{1.35}
+\begin{tabular}{@{}p{2.6cm}p{4.6cm}p{4.6cm}@{}}
+\toprule
+\textbf{Caso} & \textbf{Señal en el tableau} & \textbf{Qué significa}\\
+\midrule
+Óptimos múltiples & Coeficiente cero en $z$ de una no básica, en el óptimo & Toda una cara/segmento es óptima, no solo un vértice\\
+No acotado & Columna entrante sin ninguna razón positiva & $z\to\infty$; falta una restricción en el modelo\\
+Degenerado & Empate en la razón mínima & Vértice donde sobran restricciones activas; riesgo de ciclado\\
+\textbf{Infactible} & \textbf{Fase 1 termina con $w>0$} & \textbf{La región factible está vacía; ninguna solución existe}\\
+\bottomrule
+\end{tabular}
+\end{center}
+\normalsize
+\end{frame}
+
+\begin{frame}{Ejercicios propuestos}
+\small
+\begin{enumerate}
+\setlength{\itemsep}{2pt}
+\item Resuelva a mano, con Dos Fases, $\max z=x_1+2x_2$ s.a. $x_1+x_2\leq6,\ x_1+3x_2\geq9,\ x_1,x_2\geq0$. Verifique con \texttt{scipy}.
+\item Demuestre que $\max z=x_1$ s.a. $x_1\geq5,\ x_1\leq2,\ x_1\geq0$ es infactible, tanto por Fase 1 como con un certificado algebraico directo (sin variables artificiales, en una sola línea).
+\item Para el Ejemplo A de esta clase, ¿qué habría pasado en Fase 1 si en vez de elegir $x_2$ como entrante hubiéramos elegido $x_1$ (también negativo)? Verifique si se llega igual a $w=0$.
+\item Investigue por qué el método de la Gran M puede fallar numéricamente con una elección de $M$ demasiado grande, y qué alternativa usan los solvers modernos (pista: buscar ``Big M numerical issues linear programming'').
+\item Retome el Ejemplo 1 (sin poda genuina) de la Clase 5 y verifique si alguno de sus nodos requería Fase 1. ¿Por qué sí o por qué no?
+\item Escriba el certificado de infactibilidad (combinación lineal de restricciones) para el ejercicio 2, siguiendo el mismo estilo del certificado mostrado en esta clase para el Ejemplo B.
+\end{enumerate}
+\end{frame}
+
+\begin{frame}{Referencias}
+\small
+\begin{itemize}
+\setlength{\itemsep}{1pt}
+\item Bertsimas, D., \& Tsitsiklis, J. N. (1997). \emph{Introduction to Linear Optimization}, Cap. 3 (Fase 1, Gran M). Athena Scientific.
+\item Chvátal, V. (1983). \emph{Linear Programming}, Cap. 5. W. H. Freeman.
+\item Farkas, J. (1902). ``Theorie der einfachen Ungleichungen''. \emph{Journal für die reine und angewandte Mathematik}, 124, 1--27. (Origen del lema de Farkas.)
+\item Vanderbei, R. J. (2020). \emph{Linear Programming: Foundations and Extensions} (5th ed.), Cap. 4. Springer.
+\item Dantzig, G. B., \& Thapa, M. N. (1997). \emph{Linear Programming 1: Introduction}. Springer.
+\item Nocedal, J., \& Wright, S. J. (2006). \emph{Numerical Optimization} (2nd ed.), Cap. 13. Springer.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{}
+\centering
+{\Large\textbf{Gracias}}
+
+\vspace{0.4cm}
+\normalsize Preguntas y discusión
+\end{frame}
+
+\end{document}
